@@ -1,6 +1,6 @@
 blueprint:
   name: Sanftes Aufwachlicht (Schrittweise + Farbe)
-  description: Dimmt ein beliebiges Licht schrittweise hoch und setzt die gewuenschte Farbtemperatur. Ideal fuer Lampen ohne native Transition-Unterstuetzung.
+  description: Dimmt ein beliebiges Licht schrittweise hoch und setzt die gewuenschte Farbtemperatur (unterstuetzt Mireds & Kelvin).
   domain: automation
   input:
     trigger_time:
@@ -14,14 +14,16 @@ blueprint:
           domain: light
     light_color:
       name: Farbtemperatur
-      description: Waehle die gewuenschte Lichtfarbe fuer das Aufwachen.
-      default: "Warmweiß"
+      description: Waehle die gewuenschte Lichtfarbe (angepasst an deine Lampe).
+      default: "Neutral (2700K)"
       selector:
         select:
           options:
-            - "Warmweiß"
-            - "Neutral"
-            - "Kaltweiß"
+            - "Coolest (142 mired)"
+            - "Cool (4000K)"
+            - "Neutral (2700K)"
+            - "Warm (2200K)"
+            - "Warmest (500 mired)"
     duration:
       name: Dauer (Sekunden)
       description: Gesamtdauer des Dimmvorgangs.
@@ -34,16 +36,20 @@ blueprint:
 
 variables:
   total_duration: !input duration
-  # Berechne Pause zwischen den 50 Schritten
   delay_seconds: "{{ total_duration | float / 50 }}"
   selected_color: !input light_color
-  target_kelvin: >
-    {% if selected_color == 'Warmweiß' %}
-      2700
-    {% elif selected_color == 'Neutral' %}
-      4000
+  # Umrechnung in Mireds (Home Assistant Standard)
+  target_mireds: >
+    {% if selected_color == 'Coolest (142 mired)' %}
+      142
+    {% elif selected_color == 'Cool (4000K)' %}
+      250
+    {% elif selected_color == 'Neutral (2700K)' %}
+      370
+    {% elif selected_color == 'Warm (2200K)' %}
+      454
     {% else %}
-      6000
+      500
     {% endif %}
 
 trigger:
@@ -51,16 +57,16 @@ trigger:
     at: !input trigger_time
 
 action:
-  # Start: Licht sicher einschalten (1%)
+  # Start: Licht einschalten
   - service: light.turn_on
     target:
       entity_id: !input target_light
     data:
       brightness_pct: 1
-      kelvin: "{{ target_kelvin }}"
+      color_temp: "{{ target_mireds }}"
       transition: 0
 
-  # Schleife: 50 mal ausfuehren
+  # Schleife
   - repeat:
       count: 50
       sequence:
@@ -70,8 +76,6 @@ action:
           target:
             entity_id: !input target_light
           data:
-            # Setze Helligkeit absolut: Schritt 1 = 2%, Schritt 50 = 100%
             brightness_pct: "{{ repeat.index * 2 }}"
-            # Farbe bei jedem Schritt mitsenden, verhindert Rueckfall
-            kelvin: "{{ target_kelvin }}"
+            color_temp: "{{ target_mireds }}"
             transition: 0
