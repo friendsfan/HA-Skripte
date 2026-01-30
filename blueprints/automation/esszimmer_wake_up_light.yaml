@@ -1,0 +1,75 @@
+blueprint:
+  name: Esszimmer Licht Aufwachen (Schrittweise + Farbe)
+  description: Erhoeht die Helligkeit schrittweise und setzt die gewuenschte Farbtemperatur.
+  domain: automation
+  input:
+    trigger_time:
+      name: Startzeit
+      selector:
+        time: {}
+    target_light:
+      name: Licht
+      selector:
+        entity:
+          domain: light
+    light_color:
+      name: Farbtemperatur
+      description: Waehle die gewuenschte Lichtfarbe fuer das Aufwachen.
+      default: "Warmweiß"
+      selector:
+        select:
+          options:
+            - "Warmweiß"
+            - "Neutral"
+            - "Kaltweiß"
+    duration:
+      name: Dauer (Sekunden)
+      description: Gesamtdauer des Dimmvorgangs.
+      default: 300
+      selector:
+        number:
+          min: 60
+          max: 3600
+          unit_of_measurement: seconds
+
+variables:
+  total_duration: !input duration
+  # Berechne Pause zwischen den 50 Schritten
+  delay_seconds: "{{ total_duration | float / 50 }}"
+  selected_color: !input light_color
+  target_kelvin: >
+    {% if selected_color == 'Warmweiß' %}
+      2700
+    {% elif selected_color == 'Neutral' %}
+      4000
+    {% else %}
+      6000
+    {% endif %}
+
+trigger:
+  - platform: time
+    at: !input trigger_time
+
+action:
+  # Start: Licht sicher einschalten (1%)
+  - service: light.turn_on
+    target:
+      entity_id: !input target_light
+    data:
+      brightness_pct: 1
+      kelvin: "{{ target_kelvin }}"
+
+  # Schleife: 50 mal ausfuehren
+  - repeat:
+      count: 50
+      sequence:
+        - delay:
+            seconds: "{{ delay_seconds }}"
+        - service: light.turn_on
+          target:
+            entity_id: !input target_light
+          data:
+            # Setze Helligkeit absolut: Schritt 1 = 2%, Schritt 50 = 100%
+            brightness_pct: "{{ repeat.index * 2 }}"
+            # Farbe bei jedem Schritt mitsenden, verhindert Rueckfall
+            kelvin: "{{ target_kelvin }}"
