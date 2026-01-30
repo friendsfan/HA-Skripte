@@ -1,6 +1,6 @@
 blueprint:
-  name: Esszimmer Licht Aufwachen (Schrittweise + Farbe)
-  description: Erhoeht die Helligkeit schrittweise und setzt die gewuenschte Farbtemperatur.
+  name: Sanftes Aufwachlicht (Schrittweise + Farbe)
+  description: Dimmt ein beliebiges Licht schrittweise hoch und setzt die gewuenschte Farbtemperatur. Ideal fuer Lampen ohne native Transition-Unterstuetzung.
   domain: automation
   input:
     trigger_time:
