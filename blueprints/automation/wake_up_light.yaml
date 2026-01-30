@@ -58,6 +58,7 @@ action:
     data:
       brightness_pct: 1
       kelvin: "{{ target_kelvin }}"
+      transition: 0
 
   # Schleife: 50 mal ausfuehren
   - repeat:
@@ -73,3 +74,4 @@ action:
             brightness_pct: "{{ repeat.index * 2 }}"
             # Farbe bei jedem Schritt mitsenden, verhindert Rueckfall
             kelvin: "{{ target_kelvin }}"
+            transition: 0
