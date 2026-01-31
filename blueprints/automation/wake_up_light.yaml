@@ -1,6 +1,6 @@
 blueprint:
-  name: Sanftes Aufwachlicht (Dual-Profil + Handy + Anwesenheit)
-  description: Dimmt ein Licht schrittweise hoch. Unterstuetzt Zeitplaene, Handy-Wecker und Anwesenheitspruefung.
+  name: Sanftes Aufwachlicht (Ultimate)
+  description: Simuliert einen Sonnenaufgang. Unterstuetzt 2 Zeitplaene, Handy-Wecker, Anwesenheit und Farbtemperatur-Verlauf.
   domain: automation
   input:
     target_light:
@@ -8,9 +8,23 @@ blueprint:
       selector:
         entity:
           domain: light
-    light_color:
-      name: Farbtemperatur
-      description: Waehle die gewuenschte Lichtfarbe.
+    
+    # Farbtemperatur Verlauf
+    start_light_color:
+      name: Start-Farbtemperatur
+      description: Lichtfarbe zu Beginn (Dunkelrot/Warm).
+      default: "Warmest (500 mired)"
+      selector:
+        select:
+          options:
+            - "Coolest (142 mired)"
+            - "Cool (4000K)"
+            - "Neutral (2700K)"
+            - "Warm (2200K)"
+            - "Warmest (500 mired)"
+    end_light_color:
+      name: End-Farbtemperatur
+      description: Lichtfarbe am Ende (Hell/Neutral). Waehle dieselbe Farbe wie Start fuer 'Fix', oder eine andere fuer einen Verlauf.
       default: "Neutral (2700K)"
       selector:
         select:
@@ -20,6 +34,7 @@ blueprint:
             - "Neutral (2700K)"
             - "Warm (2200K)"
             - "Warmest (500 mired)"
+
     duration:
       name: Dauer (Sekunden)
       default: 300
@@ -74,7 +89,7 @@ blueprint:
     # Handy Wecker
     alarm_sensor:
       name: Handy Wecker Sensor (Optional)
-      description: Waehle den 'Next Alarm' Sensor deines Handys.
+      description: Waehle den 'Next Alarm' Sensor.
       default: none
       selector:
         entity:
@@ -84,7 +99,7 @@ blueprint:
     # Anwesenheit
     presence_sensor:
       name: Anwesenheits-Sensor (Optional)
-      description: "Der Handy-Wecker trigger nur, wenn dieser Sensor auf 'home' steht (z.B. person.dein_name). Leer lassen für 'immer'."
+      description: "Trigger nur, wenn dieser Sensor auf 'home' steht. Leer lassen für 'immer'."
       default: none
       selector:
         entity:
@@ -93,13 +108,30 @@ blueprint:
 variables:
   total_duration: !input duration
   delay_seconds: "{{ total_duration | float / 50 }}"
-  selected_color: !input light_color
-  target_mireds: >
-    {% if selected_color == 'Coolest (142 mired)' %} 142
-    {% elif selected_color == 'Cool (4000K)' %} 250
-    {% elif selected_color == 'Neutral (2700K)' %} 370
-    {% elif selected_color == 'Warm (2200K)' %} 454
+  
+  # Input Variablen fuer Farben
+  var_start_color: !input start_light_color
+  var_end_color: !input end_light_color
+
+  # Hilfsfunktion zur Mired Berechnung (Logik verdoppelt da Macro in Blueprint schwierig)
+  start_mireds: >
+    {% if var_start_color == 'Coolest (142 mired)' %} 142
+    {% elif var_start_color == 'Cool (4000K)' %} 250
+    {% elif var_start_color == 'Neutral (2700K)' %} 370
+    {% elif var_start_color == 'Warm (2200K)' %} 454
     {% else %} 500 {% endif %}
+
+  end_mireds: >
+    {% if var_end_color == 'Coolest (142 mired)' %} 142
+    {% elif var_end_color == 'Cool (4000K)' %} 250
+    {% elif var_end_color == 'Neutral (2700K)' %} 370
+    {% elif var_end_color == 'Warm (2200K)' %} 454
+    {% else %} 500 {% endif %}
+
+  # Schrittweite berechnen
+  mired_step: "{{ (end_mireds | int - start_mireds | int) / 50 }}"
+
+  # Weitere Variablen
   var_alarm_sensor: !input alarm_sensor
   var_duration_seconds: !input duration
   var_presence_sensor: !input presence_sensor
@@ -152,13 +184,23 @@ condition:
               {% endif %}
 
 action:
+  # Start: Licht einschalten (Start-Farbe)
   - service: light.turn_on
     target: {entity_id: !input target_light}
-    data: {brightness_pct: 1, color_temp: "{{ target_mireds }}", transition: 0}
+    data:
+      brightness_pct: 1
+      color_temp: "{{ start_mireds | int }}"
+      transition: 0
+  
+  # Schleife mit Farbverlauf
   - repeat:
       count: 50
       sequence:
         - delay: {seconds: "{{ delay_seconds }}"}
         - service: light.turn_on
           target: {entity_id: !input target_light}
-          data: {brightness_pct: "{{ repeat.index * 2 }}", color_temp: "{{ target_mireds }}", transition: 0}
+          data:
+            brightness_pct: "{{ repeat.index * 2 }}"
+            # Berechne aktuelle Farbe: Start + (Index * Step)
+            color_temp: "{{ (start_mireds | int + (mired_step | float * repeat.index)) | int }}"
+            transition: 0
