@@ -1,21 +1,77 @@
 blueprint:
-  name: Sanftes Aufwachlicht (Schrittweise + Farbe)
-  description: Dimmt ein beliebiges Licht schrittweise hoch und setzt die gewuenschte Farbtemperatur (unterstuetzt Mireds & Kelvin).
+  name: Sanftes Aufwachlicht (Dual-Profil)
+  description: Dimmt ein Licht schrittweise hoch. Unterstuetzt zwei separate Zeitplaene (z.B. Werktags vs. Wochenende).
   domain: automation
   input:
-    trigger_time:
-      name: Startzeit
+    target_light:
+      name: Licht
+      selector:
+        entity:
+          domain: light
+    light_color:
+      name: Farbtemperatur
+      description: Waehle die gewuenschte Lichtfarbe.
+      default: "Neutral (2700K)"
+      selector:
+        select:
+          options:
+            - "Coolest (142 mired)"
+            - "Cool (4000K)"
+            - "Neutral (2700K)"
+            - "Warm (2200K)"
+            - "Warmest (500 mired)"
+    duration:
+      name: Dauer (Sekunden)
+      default: 300
+      selector:
+        number:
+          min: 60
+          max: 3600
+          unit_of_measurement: seconds
+    
+    # Profil 1
+    trigger_time_1:
+      name: Startzeit 1 (z.B. Werktags)
+      default: "06:30:00"
       selector:
         time: {}
-    on_days:
-      name: Wochentage
-      description: An welchen Tagen soll der Wecker aktiv sein?
+    days_1:
+      name: Tage für Startzeit 1
       default: 
         - mon
         - tue
         - wed
         - thu
         - fri
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Montag
+              value: mon
+            - label: Dienstag
+              value: tue
+            - label: Mittwoch
+              value: wed
+            - label: Donnerstag
+              value: thu
+            - label: Freitag
+              value: fri
+            - label: Samstag
+              value: sat
+            - label: Sonntag
+              value: sun
+
+    # Profil 2
+    trigger_time_2:
+      name: Startzeit 2 (z.B. Wochenende)
+      default: "09:00:00"
+      selector:
+        time: {}
+    days_2:
+      name: Tage für Startzeit 2
+      description: "Wenn leer, ist dieses Profil deaktiviert."
+      default: 
         - sat
         - sun
       selector:
@@ -36,38 +92,11 @@ blueprint:
               value: sat
             - label: Sonntag
               value: sun
-    target_light:
-      name: Licht
-      selector:
-        entity:
-          domain: light
-    light_color:
-      name: Farbtemperatur
-      description: Waehle die gewuenschte Lichtfarbe (angepasst an deine Lampe).
-      default: "Neutral (2700K)"
-      selector:
-        select:
-          options:
-            - "Coolest (142 mired)"
-            - "Cool (4000K)"
-            - "Neutral (2700K)"
-            - "Warm (2200K)"
-            - "Warmest (500 mired)"
-    duration:
-      name: Dauer (Sekunden)
-      description: Gesamtdauer des Dimmvorgangs.
-      default: 300
-      selector:
-        number:
-          min: 60
-          max: 3600
-          unit_of_measurement: seconds
 
 variables:
   total_duration: !input duration
   delay_seconds: "{{ total_duration | float / 50 }}"
   selected_color: !input light_color
-  # Umrechnung in Mireds (Home Assistant Standard)
   target_mireds: >
     {% if selected_color == 'Coolest (142 mired)' %}
       142
@@ -83,14 +112,31 @@ variables:
 
 trigger:
   - platform: time
-    at: !input trigger_time
+    at: !input trigger_time_1
+    id: "t1"
+  - platform: time
+    at: !input trigger_time_2
+    id: "t2"
 
 condition:
-  - condition: time
-    weekday: !input on_days
+  - condition: or
+    conditions:
+      # Profil 1 Bedingung
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: "t1"
+          - condition: time
+            weekday: !input days_1
+      # Profil 2 Bedingung
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: "t2"
+          - condition: time
+            weekday: !input days_2
 
 action:
-  # Start: Licht einschalten
   - service: light.turn_on
     target:
       entity_id: !input target_light
@@ -99,7 +145,6 @@ action:
       color_temp: "{{ target_mireds }}"
       transition: 0
 
-  # Schleife
   - repeat:
       count: 50
       sequence:
