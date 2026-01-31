@@ -1,6 +1,6 @@
 blueprint:
-  name: Sanftes Aufwachlicht (Dual-Profil + Handy)
-  description: Dimmt ein Licht schrittweise hoch. Unterstuetzt zwei Zeitplaene UND Handy-Wecker (Next Alarm).
+  name: Sanftes Aufwachlicht (Dual-Profil + Handy + Anwesenheit)
+  description: Dimmt ein Licht schrittweise hoch. Unterstuetzt Zeitplaene, Handy-Wecker und Anwesenheitspruefung.
   domain: automation
   input:
     target_light:
@@ -37,30 +37,18 @@ blueprint:
         time: {}
     days_1:
       name: Tage für Startzeit 1
-      default: 
-        - mon
-        - tue
-        - wed
-        - thu
-        - fri
+      default: [mon, tue, wed, thu, fri]
       selector:
         select:
           multiple: true
           options:
-            - label: Montag
-              value: mon
-            - label: Dienstag
-              value: tue
-            - label: Mittwoch
-              value: wed
-            - label: Donnerstag
-              value: thu
-            - label: Freitag
-              value: fri
-            - label: Samstag
-              value: sat
-            - label: Sonntag
-              value: sun
+            - {label: Montag, value: mon}
+            - {label: Dienstag, value: tue}
+            - {label: Mittwoch, value: wed}
+            - {label: Donnerstag, value: thu}
+            - {label: Freitag, value: fri}
+            - {label: Samstag, value: sat}
+            - {label: Sonntag, value: sun}
 
     # Profil 2
     trigger_time_2:
@@ -70,70 +58,59 @@ blueprint:
         time: {}
     days_2:
       name: Tage für Startzeit 2
-      description: "Wenn leer, ist dieses Profil deaktiviert."
-      default: 
-        - sat
-        - sun
+      default: [sat, sun]
       selector:
         select:
           multiple: true
           options:
-            - label: Montag
-              value: mon
-            - label: Dienstag
-              value: tue
-            - label: Mittwoch
-              value: wed
-            - label: Donnerstag
-              value: thu
-            - label: Freitag
-              value: fri
-            - label: Samstag
-              value: sat
-            - label: Sonntag
-              value: sun
+            - {label: Montag, value: mon}
+            - {label: Dienstag, value: tue}
+            - {label: Mittwoch, value: wed}
+            - {label: Donnerstag, value: thu}
+            - {label: Freitag, value: fri}
+            - {label: Samstag, value: sat}
+            - {label: Sonntag, value: sun}
 
     # Handy Wecker
     alarm_sensor:
       name: Handy Wecker Sensor (Optional)
-      description: Waehle den 'Next Alarm' Sensor deines Handys (z.B. sensor.pixel_next_alarm). Das Licht startet AUTOMATISCH vor dem Wecker (Dauer wird abgezogen).
+      description: Waehle den 'Next Alarm' Sensor deines Handys.
       default: none
       selector:
         entity:
           domain: sensor
           device_class: timestamp
 
+    # Anwesenheit
+    presence_sensor:
+      name: Anwesenheits-Sensor (Optional)
+      description: "Der Handy-Wecker trigger nur, wenn dieser Sensor auf 'home' steht (z.B. person.dein_name). Leer lassen für 'immer'."
+      default: none
+      selector:
+        entity:
+          domain: [person, device_tracker]
+
 variables:
   total_duration: !input duration
   delay_seconds: "{{ total_duration | float / 50 }}"
   selected_color: !input light_color
   target_mireds: >
-    {% if selected_color == 'Coolest (142 mired)' %}
-      142
-    {% elif selected_color == 'Cool (4000K)' %}
-      250
-    {% elif selected_color == 'Neutral (2700K)' %}
-      370
-    {% elif selected_color == 'Warm (2200K)' %}
-      454
-    {% else %}
-      500
-    {% endif %}
-  
-  # Variablen fuer Trigger
+    {% if selected_color == 'Coolest (142 mired)' %} 142
+    {% elif selected_color == 'Cool (4000K)' %} 250
+    {% elif selected_color == 'Neutral (2700K)' %} 370
+    {% elif selected_color == 'Warm (2200K)' %} 454
+    {% else %} 500 {% endif %}
   var_alarm_sensor: !input alarm_sensor
   var_duration_seconds: !input duration
+  var_presence_sensor: !input presence_sensor
 
 trigger:
-  # Festzeit 1
   - platform: time
     at: !input trigger_time_1
     id: "t1"
-  # Festzeit 2
   - platform: time
     at: !input trigger_time_2
     id: "t2"
-  # Handy Sensor Trigger
   - platform: template
     value_template: >
       {% if var_alarm_sensor != none %}
@@ -141,61 +118,47 @@ trigger:
         {% if alarm_state not in ['unknown', 'unavailable', 'None'] %}
           {% set alarm_ts = as_timestamp(alarm_state) %}
           {% if alarm_ts %}
-             {# Berechne Startzeit: Alarm - Dauer #}
              {% set start_ts = alarm_ts - var_duration_seconds | int %}
-             {# Pruefe, ob JETZT (now) innerhalb der Start-Minute liegt #}
              {% set now_ts = as_timestamp(now()) %}
              {{ now_ts >= start_ts and now_ts < (start_ts + 60) }}
-          {% else %}
-             False
           {% endif %}
-        {% else %}
-          False
         {% endif %}
-      {% else %}
-        False
       {% endif %}
     id: "t_alarm"
 
 condition:
   - condition: or
     conditions:
-      # Profil 1 Bedingung
       - condition: and
         conditions:
           - condition: trigger
             id: "t1"
           - condition: time
             weekday: !input days_1
-      # Profil 2 Bedingung
       - condition: and
         conditions:
           - condition: trigger
             id: "t2"
           - condition: time
             weekday: !input days_2
-      # Handy Wecker Bedingung (immer erlauben wenn Trigger feuert)
-      - condition: trigger
-        id: "t_alarm"
+      - condition: and
+        conditions:
+          - condition: trigger
+            id: "t_alarm"
+          - condition: template
+            value_template: >
+              {% if var_presence_sensor == none %} true
+              {% else %} {{ is_state(var_presence_sensor, 'home') }}
+              {% endif %}
 
 action:
   - service: light.turn_on
-    target:
-      entity_id: !input target_light
-    data:
-      brightness_pct: 1
-      color_temp: "{{ target_mireds }}"
-      transition: 0
-
+    target: {entity_id: !input target_light}
+    data: {brightness_pct: 1, color_temp: "{{ target_mireds }}", transition: 0}
   - repeat:
       count: 50
       sequence:
-        - delay:
-            seconds: "{{ delay_seconds }}"
+        - delay: {seconds: "{{ delay_seconds }}"}
         - service: light.turn_on
-          target:
-            entity_id: !input target_light
-          data:
-            brightness_pct: "{{ repeat.index * 2 }}"
-            color_temp: "{{ target_mireds }}"
-            transition: 0
+          target: {entity_id: !input target_light}
+          data: {brightness_pct: "{{ repeat.index * 2 }}", color_temp: "{{ target_mireds }}", transition: 0}
