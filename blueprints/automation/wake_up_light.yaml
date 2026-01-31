@@ -1,6 +1,6 @@
 blueprint:
-  name: Sanftes Aufwachlicht (Dual-Profil)
-  description: Dimmt ein Licht schrittweise hoch. Unterstuetzt zwei separate Zeitplaene (z.B. Werktags vs. Wochenende).
+  name: Sanftes Aufwachlicht (Dual-Profil + Handy)
+  description: Dimmt ein Licht schrittweise hoch. Unterstuetzt zwei Zeitplaene UND Handy-Wecker (Next Alarm).
   domain: automation
   input:
     target_light:
@@ -93,6 +93,16 @@ blueprint:
             - label: Sonntag
               value: sun
 
+    # Handy Wecker
+    alarm_sensor:
+      name: Handy Wecker Sensor (Optional)
+      description: Waehle den 'Next Alarm' Sensor deines Handys (z.B. sensor.pixel_next_alarm). Das Licht startet AUTOMATISCH vor dem Wecker (Dauer wird abgezogen).
+      default: none
+      selector:
+        entity:
+          domain: sensor
+          device_class: timestamp
+
 variables:
   total_duration: !input duration
   delay_seconds: "{{ total_duration | float / 50 }}"
@@ -109,14 +119,43 @@ variables:
     {% else %}
       500
     {% endif %}
+  
+  # Variablen fuer Trigger
+  var_alarm_sensor: !input alarm_sensor
+  var_duration_seconds: !input duration
 
 trigger:
+  # Festzeit 1
   - platform: time
     at: !input trigger_time_1
     id: "t1"
+  # Festzeit 2
   - platform: time
     at: !input trigger_time_2
     id: "t2"
+  # Handy Sensor Trigger
+  - platform: template
+    value_template: >
+      {% if var_alarm_sensor != none %}
+        {% set alarm_state = states(var_alarm_sensor) %}
+        {% if alarm_state not in ['unknown', 'unavailable', 'None'] %}
+          {% set alarm_ts = as_timestamp(alarm_state) %}
+          {% if alarm_ts %}
+             {# Berechne Startzeit: Alarm - Dauer #}
+             {% set start_ts = alarm_ts - var_duration_seconds | int %}
+             {# Pruefe, ob JETZT (now) innerhalb der Start-Minute liegt #}
+             {% set now_ts = as_timestamp(now()) %}
+             {{ now_ts >= start_ts and now_ts < (start_ts + 60) }}
+          {% else %}
+             False
+          {% endif %}
+        {% else %}
+          False
+        {% endif %}
+      {% else %}
+        False
+      {% endif %}
+    id: "t_alarm"
 
 condition:
   - condition: or
@@ -135,6 +174,9 @@ condition:
             id: "t2"
           - condition: time
             weekday: !input days_2
+      # Handy Wecker Bedingung (immer erlauben wenn Trigger feuert)
+      - condition: trigger
+        id: "t_alarm"
 
 action:
   - service: light.turn_on

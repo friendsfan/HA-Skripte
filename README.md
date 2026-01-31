@@ -9,6 +9,7 @@ Eine Sammlung meiner nützlichen Home Assistant Blueprints und Skripte.
 Dieser Blueprint simuliert einen Sonnenaufgang, indem er eine Lampe über einen definierten Zeitraum (z.B. 5 Minuten) schrittweise von 1% auf 100% Helligkeit dimmt.
 
 **Features:**
+*   📱 **Handy-Wecker Sync:** (Neu) Wähle deinen `next_alarm` Sensor (Android Companion App), und das Licht beginnt automatisch **vor** dem Wecker zu dimmen, sodass es hell ist, wenn der Alarm klingelt.
 *   📅 **Dual-Zeitplan:** Unterstützt zwei getrennte Profile in einer Automatisierung (z.B. **Werktags 06:30** und **Wochenende 09:00**).
 *   💡 **Universell:** Funktioniert auch mit Lampen (Zigbee/WLAN), die den `transition`-Befehl nicht nativ unterstützen, da Home Assistant das Dimmen in 50 kleinen Schritten übernimmt.
 *   🌡️ **Farbtemperatur:** Speziell angepasste Stufen (Coolest, Cool, Neutral, Warm, Warmest).
