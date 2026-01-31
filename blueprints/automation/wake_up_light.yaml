@@ -7,6 +7,35 @@ blueprint:
       name: Startzeit
       selector:
         time: {}
+    on_days:
+      name: Wochentage
+      description: An welchen Tagen soll der Wecker aktiv sein?
+      default: 
+        - mon
+        - tue
+        - wed
+        - thu
+        - fri
+        - sat
+        - sun
+      selector:
+        select:
+          multiple: true
+          options:
+            - label: Montag
+              value: mon
+            - label: Dienstag
+              value: tue
+            - label: Mittwoch
+              value: wed
+            - label: Donnerstag
+              value: thu
+            - label: Freitag
+              value: fri
+            - label: Samstag
+              value: sat
+            - label: Sonntag
+              value: sun
     target_light:
       name: Licht
       selector:
@@ -55,6 +84,10 @@ variables:
 trigger:
   - platform: time
     at: !input trigger_time
+
+condition:
+  - condition: time
+    weekday: !input on_days
 
 action:
   # Start: Licht einschalten
